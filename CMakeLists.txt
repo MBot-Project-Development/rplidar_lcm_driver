@@ -16,10 +16,10 @@ add_executable(rplidar_driver src/rplidar_driver.cpp)
 
 target_link_libraries(rplidar_driver
     ${CMAKE_THREAD_LIBS_INIT}
-    libsl_lidar_sdk.a
     lcm
     mbot_lcm_msgs
     pthread
+    rplidar_sdk
 )
 
 target_include_directories(rplidar_driver PRIVATE include)

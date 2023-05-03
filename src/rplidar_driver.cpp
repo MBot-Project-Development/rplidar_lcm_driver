@@ -9,8 +9,8 @@
 #include <lcm/lcm-cpp.hpp>
 #include <mbot_lcm_msgs/lidar_t.hpp>
 
-#include <rplidar/rplidar.h>
-#include <rplidar/sl_lidar.h>
+#include <rplidar.h>
+// #include <sl_lidar.h>
 
 #ifndef _countof
 #define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
