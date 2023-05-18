@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <signal.h>
 #include <sys/time.h>
 
@@ -10,7 +11,6 @@
 #include <mbot_lcm_msgs/lidar_t.hpp>
 
 #include <rplidar.h>
-// #include <sl_lidar.h>
 
 #ifndef _countof
 #define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
@@ -34,7 +34,6 @@ bool checkRPLIDARHealth(RPlidarDriver * drv)
     u_result     op_result;
     rplidar_response_device_health_t healthinfo;
 
-
     op_result = drv->getHealth(healthinfo);
     if (IS_OK(op_result)) { // the macro IS_OK is the preperred way to judge whether the operation is succeed.
         printf("RPLidar health status : %d\n", healthinfo.status);
@@ -53,13 +52,13 @@ bool checkRPLIDARHealth(RPlidarDriver * drv)
     }
 }
 
+// Catch SIGINT
 #include <signal.h>
 bool ctrl_c_pressed;
 void ctrlc(int)
 {
     ctrl_c_pressed = true;
 }
-
 
 bool connect(RPlidarDriver* drv, const char* opt_com_path, _u32 opt_com_baudrate) {
     // If this driver thinks it is already connected, reset it.
@@ -104,41 +103,56 @@ bool validateStartupHealth(RPlidarDriver* drv) {
     return checkRPLIDARHealth(drv);
 }
 
+int main(int argc, char *argv[]) {
 
-int main(int argc, const char * argv[]) {
-
-    //Shouldn't need to adjust these with the exception of pwm
-    const char * opt_com_path = NULL;
+    // Default values
+    const char * opt_com_path = "/dev/rplidar";
     _u32         opt_com_baudrate = 115200;
-    u_result     op_result;
     uint16_t pwm = 700;
 
     lcm::LCM lcmConnection(MULTICAST_URL);
 
-    if(!lcmConnection.good()){ return 1; }
-
-    std::cout << "LIDAR driver for RPLIDAR A1 & A2" << std::endl;
-    //std::cout << "Version: " << SL_LIDAR_SDK_VERSION << std::endl;
-
-    // read pwm from command line if specified...
-    if (argc>1) pwm = atoi(argv[1]);
-
-    // read serial port from the command line if specified...
-    if (argc>2) opt_com_path = argv[2]; // or set to a fixed value: e.g. "com3"
-
-    // read baud rate from the command line if specified...
-    if (argc>3) opt_com_baudrate = strtoul(argv[3], NULL, 10);
+    if(!lcmConnection.good()) { return 1; }
 
 
-    if (!opt_com_path) {
-#ifdef _WIN32
-        // use default com port
-        opt_com_path = "\\\\.\\com3";
-#else
-        opt_com_path = "/dev/ttyUSB0";
-#endif
+
+    // command line arguments
+    int c;
+    static struct option long_options[] = {
+        {"path", optional_argument, NULL, 'p'},
+        {"baudrate", optional_argument, NULL, 'b'},
+        {"pwm", optional_argument, NULL, 'w'},
+        {"help", no_argument, NULL, 'h'},
+        {NULL, 0, NULL, 0}
+    };
+
+    while ((c = getopt_long(argc, argv, "p:b:w:h", long_options, NULL)) != -1) {
+        switch (c) {
+        case 'p':
+            if(optarg)
+                opt_com_path = optarg;
+            break;
+        case 'b':
+            if(optarg)
+                opt_com_baudrate = strtoul(optarg, NULL, 10);
+            break;
+        case 'w':
+            if(optarg)
+                pwm = atoi(optarg);
+            break;
+        case 'h':
+            std::cout << "Usage: \n"
+                      << "\t--dev or -d: Path of the device (default: " << opt_com_path << ") \n"
+                      << "\t--baudrate or -b: Baudrate of the device (default: " << opt_com_baudrate << ") \n"
+                      << "\t--pwm or -w: Pulse Width Modulation value (default: " << pwm << ") \n"
+                      << "\t--help or -h: Display this help message \n";
+            return 0;
+        default:
+            return 1;
+        }
     }
 
+    std::cout << "LIDAR driver for RPLIDAR A1 & A2" << std::endl;
     // create the driver instance
     RPlidarDriver * drv = RPlidarDriver::CreateDriver();
 
@@ -167,7 +181,7 @@ int main(int argc, const char * argv[]) {
     drv->setMotorPWM(pwm);
     drv->startScan(0, 1);
     
-    // fetch result and print it out...
+    u_result     op_result;
 
     while (1) {
         rplidar_response_measurement_node_hq_t nodes[8192];
