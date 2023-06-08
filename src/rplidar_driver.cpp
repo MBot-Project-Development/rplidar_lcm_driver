@@ -109,6 +109,7 @@ int main(int argc, char *argv[]) {
     const char * opt_com_path = "/dev/rplidar";
     _u32         opt_com_baudrate = 115200;
     uint16_t pwm = 700;
+    bool lidar_connected = false;
 
     lcm::LCM lcmConnection(MULTICAST_URL);
 
@@ -175,6 +176,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (!validateStartupHealth(drv)) goto on_finished;
+    else lidar_connected = true;
 
     drv->startMotor();
     // start scan...
@@ -183,7 +185,7 @@ int main(int argc, char *argv[]) {
     
     u_result     op_result;
 
-    while (1) {
+    while (lidar_connected) {
         rplidar_response_measurement_node_hq_t nodes[8192];
         size_t   count = _countof(nodes);
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Start MBot RPLidar Driver
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/local/bin/rplidar_driver
+Restart=never
+User=mbot
+
+[Install]
+WantedBy=graphical.target
+
