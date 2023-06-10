@@ -1,12 +1,17 @@
 [Unit]
 Description=Start MBot RPLidar Driver
-After=multi-user.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
+Restart=on-failure
+StartLimitBurst=5
+StartLimitIntervalSec=60
+RestartSec=5
 ExecStart=/usr/local/bin/rplidar_driver
-Restart=never
 User=mbot
 
 [Install]
-WantedBy=graphical.target
+WantedBy=network-online.target
 
