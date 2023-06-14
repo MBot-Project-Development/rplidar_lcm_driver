@@ -5,7 +5,7 @@ Eventually it will allow starting and stopping the motor and changing the speed 
 
 ### Install ###
 To compile the program:
-```
+```bash
 $ git submodule init
 $ git submodule update
 $ cd rplidar_sdk && git checkout mbot/v1.12.1
@@ -17,13 +17,7 @@ $ make
 $ sudo make install
 ```
 
-TODO: 
-- The binary is not installed, modfy CMake file to install in `/usr/local/bin`
+TODO:
 - Add support for switching the motor on and off and changing speed
 - Make a service to start the driver automatically
 - modify code to try dev link first (/dev/rplidar)
-
-
-
-
-
