@@ -3,21 +3,27 @@ This driver communicates over serial with the Slamtec RPLidar A1 and A2 (tested)
 
 Eventually it will allow starting and stopping the motor and changing the speed of rotation. (not yet implemented)
 
-### Install ###
-To compile the program:
+## Install
+To compile the program, first update the submodule:
 ```bash
-$ git submodule init
-$ git submodule update
-$ cd rplidar_sdk && git checkout mbot/v1.12.1
-$ cd ..
-$ mkdir build
-$ cd build
-$ cmake ..
-$ make
-$ sudo make install
+git pull && git submodule update --init --recursive
 ```
 
-TODO:
+Then, install the driver as follows:
+```bash
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+```
+
+Finally, install the service to run the driver automatically on startup:
+```bash
+cd services
+./install_rplidar_service.sh
+```
+
+## TODO
 - Add support for switching the motor on and off and changing speed
-- Make a service to start the driver automatically
 - modify code to try dev link first (/dev/rplidar)
