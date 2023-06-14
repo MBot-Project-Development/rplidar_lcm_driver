@@ -6,8 +6,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 Restart=on-failure
-StartLimitBurst=5
-StartLimitIntervalSec=60
 RestartSec=5
 ExecStart=/usr/local/bin/rplidar_driver
 User=mbot
