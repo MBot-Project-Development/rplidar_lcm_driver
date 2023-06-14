@@ -6,7 +6,6 @@ add_subdirectory(rplidar_sdk/sdk)
 set(CMAKE_BUILD_TYPE RelWithDebInfo)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 find_package(Threads REQUIRED)
 find_package(lcm REQUIRED)
@@ -25,6 +24,12 @@ target_link_libraries(rplidar_driver
 )
 
 target_include_directories(rplidar_driver PRIVATE include)
+
+# This is needed to find the shared libraries correctly on RPi OS.
+set_target_properties(rplidar_driver PROPERTIES
+    INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib
+    BUILD_WITH_INSTALL_RPATH 1
+)
 
 # Install binary to system.
 install(
