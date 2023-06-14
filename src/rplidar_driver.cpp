@@ -36,7 +36,7 @@ bool checkRPLIDARHealth(RPlidarDriver * drv)
 
     op_result = drv->getHealth(healthinfo);
     if (IS_OK(op_result)) { // the macro IS_OK is the preperred way to judge whether the operation is succeed.
-        printf("RPLidar health status : %d\n", healthinfo.status);
+        fprintf(stderr, "RPLidar health status : %d\n", healthinfo.status);
         if (healthinfo.status == RPLIDAR_STATUS_ERROR) {
             fprintf(stderr, "Error, rplidar internal error detected. Please reboot the device to retry.\n");
             // enable the following code if you want rplidar to be reboot by software
@@ -87,12 +87,12 @@ bool validateStartupHealth(RPlidarDriver* drv) {
     }
 
     // print out the device serial number, firmware and hardware version number..
-    printf("RPLIDAR S/N: ");
+    fprintf(stderr, "RPLIDAR S/N: ");
     for (int pos = 0; pos < 16 ;++pos) {
-        printf("%02X", devinfo.serialnum[pos]);
+        fprintf(stderr, "%02X", devinfo.serialnum[pos]);
     }
 
-    printf("\n"
+    fprintf(stderr, "\n"
             "Firmware Ver: %d.%02d\n"
             "Hardware Rev: %d\n"
             , devinfo.firmware_version>>8
@@ -161,10 +161,10 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "insufficent memory, exit\n");
         exit(-2);
     }
-    
+
     int64_t now = utime_now();
     int64_t prev_time;
-    
+
     signal(SIGINT, ctrlc);
     signal(SIGTERM, ctrlc);
 
@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
     // start scan...
     drv->setMotorPWM(pwm);
     drv->startScan(0, 1);
-    
+
     u_result     op_result;
 
     while (lidar_connected) {
@@ -242,4 +242,3 @@ on_finished:
     RPlidarDriver::DisposeDriver(drv);
     return 0;
 }
-
