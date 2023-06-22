@@ -3,7 +3,17 @@ This driver communicates over serial with the Slamtec RPLidar A1 and A2 (tested)
 
 Eventually it will allow starting and stopping the motor and changing the speed of rotation. (not yet implemented)
 
-## Install
+## Fast Install
+
+You can build and install all the code and services with the script:
+```bash
+./scripts/install.sh
+```
+
+## Install Steps
+
+You do not need to go through this install procedure if you use the install script.
+
 To compile the program, first update the submodule:
 ```bash
 git pull && git submodule update --init --recursive
