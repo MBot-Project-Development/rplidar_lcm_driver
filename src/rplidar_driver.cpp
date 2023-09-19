@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
 
     if(!lcmConnection.good()) { return 1; }
 
-
+    uint8_t stride = 0;
 
     // command line arguments
     int c;
@@ -124,10 +124,10 @@ int main(int argc, char *argv[]) {
         {"baudrate", optional_argument, NULL, 'b'},
         {"pwm", optional_argument, NULL, 'w'},
         {"help", no_argument, NULL, 'h'},
-        {NULL, 0, NULL, 0}
-    };
+        {"stride", required_argument, NULL, 's'},
+        {NULL, 0, NULL, 0}};
 
-    while ((c = getopt_long(argc, argv, "p:b:w:h", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "p:b:w:s:h", long_options, NULL)) != -1) {
         switch (c) {
         case 'p':
             if(optarg)
@@ -141,11 +141,15 @@ int main(int argc, char *argv[]) {
             if(optarg)
                 pwm = atoi(optarg);
             break;
+        case 's':
+            stride = atoi(optarg);
+            break;
         case 'h':
             std::cout << "Usage: \n"
                       << "\t--dev or -d: Path of the device (default: " << opt_com_path << ") \n"
                       << "\t--baudrate or -b: Baudrate of the device (default: " << opt_com_baudrate << ") \n"
                       << "\t--pwm or -w: Pulse Width Modulation value (default: " << pwm << ") \n"
+                      << "\t--stride or -s: Stride value for lidar rays, 0 = include all (default: " << stride << ")\n"
                       << "\t--help or -h: Display this help message \n";
             return 0;
         default:
@@ -198,18 +202,18 @@ int main(int argc, char *argv[]) {
 
             drv->ascendScanData(nodes, count);
 
+            int stride_ray_count = count / (stride + 1);
             mbot_lcm_msgs::lidar_t newLidar;
 
             newLidar.utime = now;
-            newLidar.num_ranges = count;
+            newLidar.num_ranges = stride_ray_count;
+            newLidar.ranges.resize(stride_ray_count);
+            newLidar.thetas.resize(stride_ray_count);
+            newLidar.intensities.resize(stride_ray_count);
+            newLidar.times.resize(stride_ray_count);
 
-            newLidar.ranges.resize(count);
-            newLidar.thetas.resize(count);
-            newLidar.intensities.resize(count);
-            newLidar.times.resize(count);
-
-            for (int pos = 0; pos < (int)count ; ++pos) {
-            	int scan_idx = (int)count - pos - 1;
+            for (int pos = 0; pos < stride_ray_count ; ++pos) {
+            	int scan_idx = (int)count - (pos * (stride+1)) - 1;
                 newLidar.ranges[pos] = nodes[scan_idx].dist_mm_q2/4000.0f;
             	newLidar.thetas[pos] = 2*PI - nodes[scan_idx].angle_z_q14 * (PI / 32768.0); // use updated angle formula
             	newLidar.intensities[pos] = nodes[scan_idx].quality >> RPLIDAR_RESP_MEASUREMENT_QUALITY_SHIFT;
