@@ -23,6 +23,7 @@
 using namespace rp::standalone::rplidar;
 
 bool ctrl_c_pressed;
+RPlidarDriver *drv;
 
 int64_t utime_now() // blacklist-ignore
 {
@@ -31,7 +32,7 @@ int64_t utime_now() // blacklist-ignore
     return (int64_t) tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
-bool checkRPLIDARHealth(RPlidarDriver * drv)
+bool checkRPLIDARHealth()
 {
     u_result     op_result;
     rplidar_response_device_health_t healthinfo;
@@ -56,10 +57,19 @@ bool checkRPLIDARHealth(RPlidarDriver * drv)
 
 void ctrlc(int)
 {
+    std::cout << "Killing RPLidar driver.\n";
     ctrl_c_pressed = true;
 }
 
-bool connect(RPlidarDriver* drv, const char* opt_com_path, _u32 opt_com_baudrate) {
+bool connect(const char* opt_com_path, _u32 opt_com_baudrate) {
+    if (!drv){
+        drv = RPlidarDriver::CreateDriver();
+        if(!drv){
+            fprintf(stderr, "insufficent memory, exit\n");
+            exit(-2);
+        }
+    }
+
     // If this driver thinks it is already connected, reset it.
     if (drv->isConnected()) {
         RPlidarDriver::DisposeDriver(drv);
@@ -73,7 +83,7 @@ bool connect(RPlidarDriver* drv, const char* opt_com_path, _u32 opt_com_baudrate
     return true;
 }
 
-bool validateStartupHealth(RPlidarDriver* drv) {
+bool validateStartupHealth() {
     rplidar_response_device_info_t devinfo;
 
     // retrieving the device info
@@ -97,8 +107,7 @@ bool validateStartupHealth(RPlidarDriver* drv) {
             , devinfo.firmware_version & 0xFF
             , (int)devinfo.hardware_version);
 
-    // check health...
-    return checkRPLIDARHealth(drv);
+    return checkRPLIDARHealth();
 }
 
 int main(int argc, char *argv[]) {
@@ -159,27 +168,19 @@ int main(int argc, char *argv[]) {
 
     std::cout << "LIDAR driver for RPLIDAR A1 & A2" << std::endl;
 
-    // create the driver instance
-    RPlidarDriver * drv = RPlidarDriver::CreateDriver();
-
-    if (!drv) {
-        fprintf(stderr, "insufficent memory, exit\n");
-        exit(-2);
-    }
-
     int64_t now = utime_now();
     int64_t prev_time;
     u_result op_result;
 
     while(!ctrl_c_pressed){
         //Not connected - try to make connection
-        while (!connect(drv, opt_com_path, opt_com_baudrate) && !ctrl_c_pressed && !lidar_connected)
+        while (!connect(opt_com_path, opt_com_baudrate) && !ctrl_c_pressed)
         {
             usleep(CONNECT_PERIOD);
         }
-        if (!validateStartupHealth(drv) || ctrl_c_pressed)
+        if (!validateStartupHealth() || ctrl_c_pressed)
             break;
-        
+        std::cout << "LiDAR connected.\n";
         lidar_connected = true;
 
         drv->startMotor();
@@ -218,12 +219,16 @@ int main(int argc, char *argv[]) {
                 lcmConnection.publish("LIDAR", &newLidar);
             }else{
                 //Assume that we have lost connection
+                std::cout << "LiDAR disconnected.\n";
+                RPlidarDriver::DisposeDriver(drv);
+                drv = nullptr;
                 lidar_connected = false;
             }
         }
+    }
     drv->stop();
     drv->stopMotor();
-    std::cout << "RPLidar Driver shutting down." << std::endl;
+    std::cout << "RPLidar Driver exiting." << std::endl;
     RPlidarDriver::DisposeDriver(drv);
     return 0;
 }
