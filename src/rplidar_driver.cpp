@@ -22,6 +22,9 @@
 
 using namespace rp::standalone::rplidar;
 
+bool ctrl_c_pressed;
+RPlidarDriver *drv;
+
 int64_t utime_now() // blacklist-ignore
 {
     struct timeval tv;
@@ -29,7 +32,7 @@ int64_t utime_now() // blacklist-ignore
     return (int64_t) tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
-bool checkRPLIDARHealth(RPlidarDriver * drv)
+bool checkRPLIDARHealth()
 {
     u_result     op_result;
     rplidar_response_device_health_t healthinfo;
@@ -52,15 +55,21 @@ bool checkRPLIDARHealth(RPlidarDriver * drv)
     }
 }
 
-// Catch SIGINT
-#include <signal.h>
-bool ctrl_c_pressed;
 void ctrlc(int)
 {
+    std::cout << "Killing RPLidar driver.\n";
     ctrl_c_pressed = true;
 }
 
-bool connect(RPlidarDriver* drv, const char* opt_com_path, _u32 opt_com_baudrate) {
+bool connect(const char* opt_com_path, _u32 opt_com_baudrate) {
+    if (!drv){
+        drv = RPlidarDriver::CreateDriver();
+        if(!drv){
+            fprintf(stderr, "insufficent memory, exit\n");
+            exit(-2);
+        }
+    }
+
     // If this driver thinks it is already connected, reset it.
     if (drv->isConnected()) {
         RPlidarDriver::DisposeDriver(drv);
@@ -74,8 +83,7 @@ bool connect(RPlidarDriver* drv, const char* opt_com_path, _u32 opt_com_baudrate
     return true;
 }
 
-
-bool validateStartupHealth(RPlidarDriver* drv) {
+bool validateStartupHealth() {
     rplidar_response_device_info_t devinfo;
 
     // retrieving the device info
@@ -99,8 +107,7 @@ bool validateStartupHealth(RPlidarDriver* drv) {
             , devinfo.firmware_version & 0xFF
             , (int)devinfo.hardware_version);
 
-    // check health...
-    return checkRPLIDARHealth(drv);
+    return checkRPLIDARHealth();
 }
 
 int main(int argc, char *argv[]) {
@@ -109,13 +116,12 @@ int main(int argc, char *argv[]) {
     const char * opt_com_path = "/dev/rplidar";
     _u32         opt_com_baudrate = 115200;
     uint16_t pwm = 700;
+    uint8_t stride = 0;
     bool lidar_connected = false;
 
     lcm::LCM lcmConnection(MULTICAST_URL);
 
     if(!lcmConnection.good()) { return 1; }
-
-    uint8_t stride = 0;
 
     // command line arguments
     int c;
@@ -126,6 +132,9 @@ int main(int argc, char *argv[]) {
         {"help", no_argument, NULL, 'h'},
         {"stride", required_argument, NULL, 's'},
         {NULL, 0, NULL, 0}};
+
+    signal(SIGINT, ctrlc);
+    signal(SIGTERM, ctrlc);
 
     while ((c = getopt_long(argc, argv, "p:b:w:s:h", long_options, NULL)) != -1) {
         switch (c) {
@@ -158,91 +167,68 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "LIDAR driver for RPLIDAR A1 & A2" << std::endl;
-    // create the driver instance
-    RPlidarDriver * drv = RPlidarDriver::CreateDriver();
-
-    if (!drv) {
-        fprintf(stderr, "insufficent memory, exit\n");
-        exit(-2);
-    }
 
     int64_t now = utime_now();
     int64_t prev_time;
+    u_result op_result;
 
-    signal(SIGINT, ctrlc);
-    signal(SIGTERM, ctrlc);
-
-    // make connection...
-    while (!connect(drv, opt_com_path, opt_com_baudrate))
-    {
-        if (ctrl_c_pressed) break;
-        usleep(CONNECT_PERIOD);
-    }
-
-    if (!validateStartupHealth(drv)) goto on_finished;
-    else lidar_connected = true;
-
-    drv->startMotor();
-    // start scan...
-    drv->setMotorPWM(pwm);
-    drv->startScan(0, 1);
-
-    u_result     op_result;
-
-    while (lidar_connected) {
-        rplidar_response_measurement_node_hq_t nodes[8192];
-        size_t   count = _countof(nodes);
-
-        op_result = drv->grabScanDataHq(nodes, count);
-        prev_time = now;
-        now = utime_now();  // get current timestamp in milliseconds
-        int64_t delta = (now - prev_time)/count;
-
-        if (IS_OK(op_result)) {
-
-            drv->ascendScanData(nodes, count);
-
-            int stride_ray_count = count / (stride + 1);
-            mbot_lcm_msgs::lidar_t newLidar;
-
-            newLidar.utime = now;
-            newLidar.num_ranges = stride_ray_count;
-            newLidar.ranges.resize(stride_ray_count);
-            newLidar.thetas.resize(stride_ray_count);
-            newLidar.intensities.resize(stride_ray_count);
-            newLidar.times.resize(stride_ray_count);
-
-            for (int pos = 0; pos < stride_ray_count ; ++pos) {
-            	int scan_idx = (int)count - (pos * (stride+1)) - 1;
-                newLidar.ranges[pos] = nodes[scan_idx].dist_mm_q2/4000.0f;
-            	newLidar.thetas[pos] = 2*PI - nodes[scan_idx].angle_z_q14 * (PI / 32768.0); // use updated angle formula
-            	newLidar.intensities[pos] = nodes[scan_idx].quality >> RPLIDAR_RESP_MEASUREMENT_QUALITY_SHIFT;
-            	newLidar.times[pos] = prev_time + pos*delta;
-            }
-
-            lcmConnection.publish("LIDAR", &newLidar);
+    while(!ctrl_c_pressed){
+        //Not connected - try to make connection
+        while (!connect(opt_com_path, opt_com_baudrate) && !ctrl_c_pressed)
+        {
+            usleep(CONNECT_PERIOD);
         }
-        else {
-            // Attempt to reconnect to the driver.
-            if (connect(drv, opt_com_path, opt_com_baudrate)) {
-                if (!validateStartupHealth(drv)) goto on_finished;
-                drv->startMotor();
-                // start scan...
-                drv->setMotorPWM(pwm);
-                drv->startScan(0,1);
-            }
-        }
-
-        if (ctrl_c_pressed){
+        if (!validateStartupHealth() || ctrl_c_pressed)
             break;
+        std::cout << "LiDAR connected.\n";
+        lidar_connected = true;
+
+        drv->startMotor();
+        drv->setMotorPWM(pwm);
+        drv->startScan(0, 1);
+
+        rplidar_response_measurement_node_hq_t nodes[8192];
+        size_t count = _countof(nodes);
+
+        while (lidar_connected && !ctrl_c_pressed){
+            op_result = drv->grabScanDataHq(nodes, count);
+            prev_time = now;
+            now = utime_now(); // get current timestamp in milliseconds
+            int64_t delta = (now - prev_time) / count;
+            if (IS_OK(op_result)){
+                drv->ascendScanData(nodes, count);
+
+                int stride_ray_count = count / (stride + 1);
+                mbot_lcm_msgs::lidar_t newLidar;
+
+                newLidar.utime = now;
+                newLidar.num_ranges = stride_ray_count;
+                newLidar.ranges.resize(stride_ray_count);
+                newLidar.thetas.resize(stride_ray_count);
+                newLidar.intensities.resize(stride_ray_count);
+                newLidar.times.resize(stride_ray_count);
+
+                for (int pos = 0; pos < stride_ray_count; ++pos)
+                {
+                    int scan_idx = (int)count - (pos * (stride + 1)) - 1;
+                    newLidar.ranges[pos] = nodes[scan_idx].dist_mm_q2 / 4000.0f;
+                    newLidar.thetas[pos] = 2 * PI - nodes[scan_idx].angle_z_q14 * (PI / 32768.0); // use updated angle formula
+                    newLidar.intensities[pos] = nodes[scan_idx].quality >> RPLIDAR_RESP_MEASUREMENT_QUALITY_SHIFT;
+                    newLidar.times[pos] = prev_time + pos * delta;
+                }
+                lcmConnection.publish("LIDAR", &newLidar);
+            }else{
+                //Assume that we have lost connection
+                std::cout << "LiDAR disconnected.\n";
+                RPlidarDriver::DisposeDriver(drv);
+                drv = nullptr;
+                lidar_connected = false;
+            }
         }
     }
-
     drv->stop();
     drv->stopMotor();
-    // done!
-on_finished:
-    std::cout << "RPLidar Driver shutting down." << std::endl;
+    std::cout << "RPLidar Driver exiting." << std::endl;
     RPlidarDriver::DisposeDriver(drv);
     return 0;
 }
